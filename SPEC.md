@@ -123,7 +123,16 @@ Janela com 4 abas:
 - **F3:** usuário leigo configura tudo pela UI sem editar YAML; app sobrevive a reboot e roda sozinho.
 - **F4:** `git clone` → seguir README → funcionando em máquina limpa; `.exe` do PyInstaller roda sem Python instalado.
 
-## 7. Estrutura do repositório
+## 7. Onboarding para terceiros (decisão 07/08/2026 — Fase 4)
+
+Objetivo: usuário leigo conecta a conta pelo botão "Login com Google" na UI e escolhe a pasta num navegador visual — sem tocar no Google Cloud Console.
+
+- Restrição: verificação Google para escopo restrito (`drive.readonly`) exige auditoria CASA paga → **fora de cogitação** (custo zero).
+- **Spike prioritário na Fase 4:** escopo `drive.file` (não restrito) + **Google Picker** para seleção da pasta. Validar: o acesso concedido à pasta selecionada cobre arquivos/subpastas **criados depois**? Se sim → vira o modo padrão para terceiros (UX limpa + privacidade máxima: o app só enxerga a pasta escolhida).
+- Fallback documentado no README: (a) OAuth com client do usuário (modelo rclone, passo a passo com prints) ou (b) client do projeto publicado sem verificação (tela de aviso "app não verificado", limite 100 usuários).
+- Segurança local: token/credencial criptografados com DPAPI (Windows); escopo somente leitura; sem servidor intermediário — nenhum dado transita por terceiros.
+
+## 8. Estrutura do repositório
 
 ```
 drive-guardian/
