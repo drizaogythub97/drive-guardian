@@ -1,0 +1,29 @@
+# Segredos — NUNCA versionar
+secrets/
+*.json
+!config.schema.json
+config.yaml
+
+# Estado e logs locais
+*.db
+*.db-wal
+*.db-shm
+logs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+*.spec
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# SO / editor
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
