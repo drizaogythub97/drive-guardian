@@ -34,7 +34,7 @@ logging:
   backups: 5
 ```
 
-Validação da config na inicialização = erro Nível 3 se inválida (caminho inexistente, ID vazio, intervalo < 5).
+Validação da config na inicialização = erro Nível 3 se inválida (ID vazio, intervalo < 5). Caminho de destino: se a **unidade/disco** não existir ou não estiver acessível (ex.: `D:\` desconectado) → Nível 3; se a unidade existir mas a **pasta final** não (ex.: `D:\DriveGuardian`) → criar automaticamente (com log INFO). Regra: o app cria pastas, nunca exige que existam; mas jamais "inventa" uma unidade.
 
 ## 2. Banco de estado (SQLite)
 
