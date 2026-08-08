@@ -1,0 +1,62 @@
+[project]
+name = "drive-guardian"
+version = "0.1.0"
+description = "Continuous local backup of Google Drive folders to a physical disk on Windows."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Adriano Cardoso" }]
+dependencies = [
+    "google-api-python-client>=2.120",
+    "google-auth>=2.29",
+    "google-auth-httplib2>=0.2",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+ui = ["PySide6>=6.7"]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8.2",
+    "types-PyYAML>=6.0",
+    "types-requests>=2.31",
+]
+
+[project.scripts]
+drive-guardian = "cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["cli"]
+packages = ["core", "core.notifier", "ui"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["core", "ui", "tests", "."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+# Third-party libs without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "googleapiclient.*",
+    "google.auth.*",
+    "google.oauth2.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

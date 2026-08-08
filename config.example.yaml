@@ -1,0 +1,28 @@
+# Drive Guardian — config.example.yaml
+# Copie para config.yaml (fora do git) e ajuste. Ver SPEC.md §1.
+auth:
+  strategy: service_account            # service_account | user_oauth
+  service_account_key: ./secrets/sa-key.json   # fora do git
+sync:
+  pairs:                               # múltiplos pares pasta->destino (v2; MVP usa 1)
+    - drive_folder_id: "1AbC..."       # ID da pasta no Drive
+      local_path: "E:/BackupDrive/MemoriasFilho"
+  interval_minutes: 30                 # editável na UI; mín. 5
+  bandwidth_limit_mbps: 0              # 0 = sem limite; usar no backup inicial >1TB
+  export_google_docs: false            # v2: exportar Docs/Sheets nativos
+  export_formats: {document: docx, spreadsheet: xlsx, presentation: pptx}
+notifications:
+  ntfy:
+    enabled: true
+    server: https://ntfy.sh
+    topic: "drive-guardian-<sufixo-aleatorio>"   # tópico = senha; usar sufixo longo
+  weekly_summary: true                 # resumo semanal (dia/hora abaixo)
+  summary_day: sunday
+  summary_hour: 20
+heartbeat:
+  enabled: true
+  url: "https://hc-ping.com/<uuid>"    # healthchecks.io, period = interval + folga
+logging:
+  level: INFO
+  max_file_mb: 10
+  backups: 5
