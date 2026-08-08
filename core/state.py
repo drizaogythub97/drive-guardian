@@ -7,10 +7,35 @@ O schema é criado sob demanda (idempotente) na primeira conexão.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from core.paths import state_db_path
+
+# Estados possíveis de um arquivo (coluna files.status).
+STATUS_SYNCED = "synced"
+STATUS_PENDING = "pending"
+STATUS_DOWNLOADING = "downloading"
+STATUS_FAILED = "failed"
+STATUS_VERSIONED = "versioned"
+QUEUEABLE = (STATUS_PENDING, STATUS_DOWNLOADING, STATUS_FAILED)
+
+
+@dataclass(frozen=True)
+class FileRow:
+    """Linha da tabela ``files`` já tipada."""
+
+    file_id: str
+    drive_path: str
+    local_path: str
+    md5: str | None
+    size: int | None
+    modified_time: str | None
+    status: str
+    fail_count: int
+    last_error: str | None
+    updated_at: str
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -49,6 +74,21 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _row_to_file(row: sqlite3.Row) -> FileRow:
+    return FileRow(
+        file_id=row["file_id"],
+        drive_path=row["drive_path"],
+        local_path=row["local_path"],
+        md5=row["md5"],
+        size=row["size"],
+        modified_time=row["modified_time"],
+        status=row["status"],
+        fail_count=row["fail_count"],
+        last_error=row["last_error"],
+        updated_at=row["updated_at"],
+    )
 
 
 class State:
@@ -92,6 +132,105 @@ class State:
     def set_page_token(self, token: str) -> None:
         with self._conn:
             self._conn.execute("UPDATE sync_state SET page_token=? WHERE id=1", (token,))
+
+    def mark_full_scan(self) -> None:
+        with self._conn:
+            self._conn.execute("UPDATE sync_state SET last_full_scan=? WHERE id=1", (_utcnow(),))
+
+    def mark_cycle_ok(self) -> None:
+        with self._conn:
+            self._conn.execute("UPDATE sync_state SET last_cycle_ok=? WHERE id=1", (_utcnow(),))
+
+    # --- Tabela files -----------------------------------------------------
+
+    def get_file(self, file_id: str) -> FileRow | None:
+        row = self._conn.execute("SELECT * FROM files WHERE file_id=?", (file_id,)).fetchone()
+        return _row_to_file(row) if row is not None else None
+
+    def files_by_status(self, *statuses: str) -> list[FileRow]:
+        if not statuses:
+            rows = self._conn.execute("SELECT * FROM files").fetchall()
+        else:
+            placeholders = ",".join("?" * len(statuses))
+            rows = self._conn.execute(
+                f"SELECT * FROM files WHERE status IN ({placeholders})", statuses
+            ).fetchall()
+        return [_row_to_file(r) for r in rows]
+
+    def count_by_status(self) -> dict[str, int]:
+        rows = self._conn.execute(
+            "SELECT status, COUNT(*) AS n FROM files GROUP BY status"
+        ).fetchall()
+        return {r["status"]: r["n"] for r in rows}
+
+    def record_pending(
+        self,
+        file_id: str,
+        drive_path: str,
+        local_path: str,
+        md5: str | None,
+        size: int | None,
+        modified_time: str | None,
+    ) -> None:
+        """Marca um arquivo como na fila, preservando ``fail_count`` existente."""
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO files (file_id, drive_path, local_path, md5, size, modified_time,
+                                   status, fail_count, last_error, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+                ON CONFLICT(file_id) DO UPDATE SET
+                    drive_path=excluded.drive_path,
+                    local_path=excluded.local_path,
+                    md5=excluded.md5,
+                    size=excluded.size,
+                    modified_time=excluded.modified_time,
+                    status=excluded.status,
+                    updated_at=excluded.updated_at
+                """,
+                (file_id, drive_path, local_path, md5, size, modified_time,
+                 STATUS_PENDING, _utcnow()),
+            )
+
+    def record_synced(
+        self,
+        file_id: str,
+        drive_path: str,
+        local_path: str,
+        md5: str | None,
+        size: int | None,
+        modified_time: str | None,
+    ) -> None:
+        """Marca um arquivo como sincronizado (zera falhas)."""
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO files (file_id, drive_path, local_path, md5, size, modified_time,
+                                   status, fail_count, last_error, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+                ON CONFLICT(file_id) DO UPDATE SET
+                    drive_path=excluded.drive_path,
+                    local_path=excluded.local_path,
+                    md5=excluded.md5,
+                    size=excluded.size,
+                    modified_time=excluded.modified_time,
+                    status=excluded.status,
+                    fail_count=0,
+                    last_error=NULL,
+                    updated_at=excluded.updated_at
+                """,
+                (file_id, drive_path, local_path, md5, size, modified_time,
+                 STATUS_SYNCED, _utcnow()),
+            )
+
+    def record_failed(self, file_id: str, error: str) -> None:
+        """Incrementa ``fail_count`` e guarda o último erro (status=failed)."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE files SET status=?, fail_count=fail_count+1, last_error=?, updated_at=? "
+                "WHERE file_id=?",
+                (STATUS_FAILED, error, _utcnow(), file_id),
+            )
 
     def close(self) -> None:
         self._conn.close()

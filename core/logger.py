@@ -77,3 +77,12 @@ def setup_logging(config: LoggingConfig, state: State | None = None) -> logging.
 def get_logger() -> logging.Logger:
     """Retorna o logger do app (sem reconfigurar)."""
     return logging.getLogger(LOGGER_NAME)
+
+
+def null_logger() -> logging.Logger:
+    """Logger silencioso (NullHandler) — usado no ``--dry-run`` para não gravar nada."""
+    logger = logging.getLogger(f"{LOGGER_NAME}.dryrun")
+    logger.handlers.clear()
+    logger.addHandler(logging.NullHandler())
+    logger.propagate = False
+    return logger

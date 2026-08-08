@@ -17,8 +17,9 @@ Under active development, phased delivery:
 
 - **Phase 0 — Foundation ✅** — skeleton, config, SQLite state, logging, service
   account auth, `python cli.py list` prints the Drive folder tree.
-- **Phase 1 — Headless MVP** — reconciliation, queue, atomic download, incremental
-  polling (`changes.list`), CLI.
+- **Phase 1 — Headless MVP ✅** — full reconciliation, download queue, atomic
+  download (`.part` → md5 → rename) with Range resume, `_versões/` for modified
+  files, incremental `changes.list` polling, and `sync` / `watch` / `--dry-run` CLI.
 - **Phase 2 — Alerts** — error levels, ntfy, healthchecks.io heartbeat, weekly summary.
 - **Phase 3 — UI** — tray, config window, logs, "Check now", Windows startup.
 - **Phase 4 — GitHub polish** — user OAuth, native Docs export, READMEs, PyInstaller, tests.

@@ -18,8 +18,9 @@ Em desenvolvimento, entrega por fases:
 
 - **Fase 0 — Fundação ✅** — esqueleto, config, estado SQLite, logging, auth por
   conta de serviço, `python cli.py list` imprime a árvore da pasta do Drive.
-- **Fase 1 — MVP headless** — reconciliação, fila, download atômico, polling
-  incremental (`changes.list`), CLI.
+- **Fase 1 — MVP headless ✅** — reconciliação completa, fila de download, download
+  atômico (`.part` → md5 → rename) com retomada via Range, `_versões/` para
+  modificados, polling incremental `changes.list` e CLI `sync` / `watch` / `--dry-run`.
 - **Fase 2 — Alertas** — níveis de erro, ntfy, heartbeat (healthchecks.io), resumo semanal.
 - **Fase 3 — UI** — bandeja, janela de config, logs, "Verificar agora", startup do Windows.
 - **Fase 4 — Polimento GitHub** — OAuth de usuário, export de Docs nativos, READMEs, PyInstaller, testes.
