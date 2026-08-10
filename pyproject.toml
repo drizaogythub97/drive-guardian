@@ -27,13 +27,16 @@ dev = [
 [project.scripts]
 drive-guardian = "cli:main"
 
+[project.gui-scripts]
+drive-guardian-ui = "ui.app:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["cli"]
-packages = ["core", "core.notifier", "ui"]
+packages = ["core", "core.notifier", "ui", "ui.tabs"]
 
 [tool.ruff]
 target-version = "py312"

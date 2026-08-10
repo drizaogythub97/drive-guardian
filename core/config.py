@@ -187,6 +187,68 @@ def parse_config(raw: dict[str, Any]) -> Config:
     )
 
 
+def to_mapping(config: Config) -> dict[str, Any]:
+    """Serializa o :class:`Config` de volta ao formato do YAML."""
+    return {
+        "auth": {
+            "strategy": config.auth.strategy,
+            "service_account_key": (
+                str(config.auth.service_account_key) if config.auth.service_account_key else None
+            ),
+        },
+        "sync": {
+            "pairs": [
+                {"drive_folder_id": p.drive_folder_id, "local_path": str(p.local_path)}
+                for p in config.sync.pairs
+            ],
+            "interval_minutes": config.sync.interval_minutes,
+            "bandwidth_limit_mbps": config.sync.bandwidth_limit_mbps,
+            "export_google_docs": config.sync.export_google_docs,
+            "export_formats": dict(config.sync.export_formats),
+        },
+        "notifications": {
+            "ntfy": {
+                "enabled": config.notifications.ntfy.enabled,
+                "server": config.notifications.ntfy.server,
+                "topic": config.notifications.ntfy.topic,
+            },
+            "weekly_summary": config.notifications.weekly_summary,
+            "summary_day": config.notifications.summary_day,
+            "summary_hour": config.notifications.summary_hour,
+        },
+        "heartbeat": {"enabled": config.heartbeat.enabled, "url": config.heartbeat.url},
+        "logging": {
+            "level": config.logging.level,
+            "max_file_mb": config.logging.max_file_mb,
+            "backups": config.logging.backups,
+        },
+    }
+
+
+def save_config(config: Config, path: str | Path) -> None:
+    """Grava o config validado em disco (é o que a UI usa ao salvar).
+
+    Valida antes de escrever — a UI nunca pode deixar o app com um arquivo que
+    ele mesmo não consegue carregar. A escrita é atômica (``.tmp`` + replace)
+    para uma queda de energia não deixar um YAML pela metade.
+    """
+    mapping = to_mapping(config)
+    parse_config(mapping)  # revalida: falha aqui não chega a tocar o arquivo
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix(target.suffix + ".tmp")
+    header = (
+        "# Drive Guardian — config.yaml\n"
+        "# Gerado pela interface do app. Pode ser editado à mão; ver SPEC.md §1.\n"
+    )
+    temp.write_text(
+        header + yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    temp.replace(target)
+
+
 def load_config(path: str | Path) -> Config:
     """Lê e valida o arquivo de config. Levanta :class:`ConfigError` (Nível 3)."""
     config_path = Path(path)

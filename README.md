@@ -24,7 +24,9 @@ Under active development, phased delivery:
   ntfy alerts for critical failures (with anti-spam), healthchecks.io heartbeat,
   weekly summary, and every movement recorded in SQLite (including files removed
   from Drive, whose local copies are always kept).
-- **Phase 3 — UI** — tray, config window, logs, "Check now", Windows startup.
+- **Phase 3 — UI ✅** — system tray with three states, configuration window with the
+  four tabs (Connection, Folders, Parameters, Activity), Drive folder browser, activity
+  log with filters and export, "Check now", and Windows startup toggle.
 - **Phase 4 — GitHub polish** — user OAuth, native Docs export, READMEs, PyInstaller, tests.
 
 ## Quick start (developers)
@@ -51,6 +53,16 @@ python cli.py events -n 30     # movement log (same data the UI will show)
 python cli.py summary [--send] # weekly summary, optionally pushed to ntfy
 python cli.py test-alert       # end-to-end check of ntfy + heartbeat
 ```
+
+### Interface
+
+```bash
+pip install -e ".[ui]"   # PySide6
+python gui.py            # tray icon + configuration window
+```
+
+The app lives in the tray: closing the window keeps the backup running. Quit from the
+tray menu.
 
 ### Configuration
 

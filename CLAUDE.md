@@ -46,7 +46,7 @@ Nível 1 transitório → retry/backoff, só log. Nível 2 degradado → pula, r
 ## Comandos
 
 ```bash
-ruff check . && mypy core/ && pytest          # gate antes de todo commit
+ruff check . && mypy core/ ui/ gui.py cli.py && pytest   # gate antes de todo commit
 python cli.py sync --dry-run                  # simula sem baixar
 python cli.py sync                            # ciclo único
 python cli.py watch                           # loop contínuo (intervalo da config)
@@ -54,6 +54,7 @@ python cli.py status                          # últimos ciclos e arquivos por s
 python cli.py events -n 30                    # log de movimentações (fonte da UI)
 python cli.py summary [--send]                # resumo semanal
 python cli.py test-alert                      # testa ntfy + heartbeat
+python gui.py                                 # abre a interface (bandeja + janela)
 ```
 
 ## Registro de movimentações (decisão do dono, 10/08/2026)

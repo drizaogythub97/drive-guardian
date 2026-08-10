@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from core.alerts import AlertManager
-from core.errors import AuthError, DiskError
+from core.errors import AuthError, CriticalError, DiskError
 from core.notifier.base import PRIORITY_DEFAULT, PRIORITY_HIGH, Notifier
 from core.state import State
 
@@ -43,11 +43,34 @@ def test_critical_notifies_immediately_with_high_priority() -> None:
     assert "Conecte o disco" in message  # mensagem acionável, não só o erro
 
 
+def test_message_leads_with_plain_language_not_jargon() -> None:
+    """Quem lê no celular vê primeiro o que houve e o que fazer; jargão por último."""
+    spy = SpyNotifier()
+    with State() as state:
+        AlertManager(spy, state, LOG).critical(
+            AuthError("Service account info was not in the expected format")
+        )
+
+    message = spy.sent[0][1]
+    first_line = message.splitlines()[0]
+    assert first_line == "O backup parou: o app perdeu o acesso à pasta do Drive."
+    assert message.index("O que fazer:") < message.index("Detalhe técnico:")
+    # O detalhe técnico continua na mensagem, mas depois da orientação.
+    assert message.index("Service account info") > message.index("O que fazer:")
+
+
 def test_auth_error_message_is_actionable() -> None:
     spy = SpyNotifier()
     with State() as state:
         AlertManager(spy, state, LOG).critical(AuthError("Credencial inválida."))
     assert "compartilhada com a conta" in spy.sent[0][1]
+
+
+def test_unknown_critical_still_gets_plain_headline() -> None:
+    spy = SpyNotifier()
+    with State() as state:
+        AlertManager(spy, state, LOG).critical(CriticalError("boom"))
+    assert spy.sent[0][1].startswith("O backup parou por um erro inesperado.")
 
 
 def test_same_alert_is_not_repeated_inside_window() -> None:
@@ -75,10 +98,23 @@ def test_alert_repeats_after_window() -> None:
         AlertManager(spy, state, LOG, repeat_after_hours=6).critical(DiskError("sumiu"))
         # Envelhece o marcador para além da janela.
         old = (datetime.now(UTC) - timedelta(hours=7)).isoformat()
-        state.connection.execute("UPDATE events SET ts=? WHERE category='notify'", (old,))
+        state.connection.execute("UPDATE events SET ts=? WHERE category LIKE 'alerta:%'", (old,))
         state.connection.commit()
         assert AlertManager(spy, state, LOG, repeat_after_hours=6).critical(DiskError("sumiu"))
     assert len(spy.sent) == 2
+
+
+def test_logged_message_has_no_internal_marker() -> None:
+    """O log da UI mostra o texto que foi para o celular, sem prefixo técnico."""
+    spy = SpyNotifier()
+    with State() as state:
+        AlertManager(spy, state, LOG).critical(DiskError("O disco D: sumiu."))
+        rows = state.recent_events(limit=10)
+
+    marker = next(r for r in rows if r["category"].startswith("alerta:"))
+    assert marker["category"] == "alerta:disco"
+    assert not marker["message"].startswith("[")
+    assert marker["message"] == spy.sent[0][1]
 
 
 def test_disabled_notifier_sends_nothing() -> None:

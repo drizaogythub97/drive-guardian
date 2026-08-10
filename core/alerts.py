@@ -33,31 +33,54 @@ DEGRADED_AFTER_HOURS = 24
 # Janela de silêncio para o mesmo alerta.
 REPEAT_AFTER_HOURS = 6
 
-_MARKER_PREFIX = "[alerta:"
+# Categoria do evento que marca "este alerta já saiu" (base da janela de silêncio).
+# Fica na coluna ``category`` e não no texto: assim a mensagem gravada é exatamente
+# a que foi para o celular, sem prefixo técnico aparecendo no log da UI.
+_MARKER_CATEGORY = "alerta"
 _TITLE = "Drive Guardian"
+
+
+def _marker_category(key: str) -> str:
+    return f"{_MARKER_CATEGORY}:{key}"
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
 
 
+# Para cada erro crítico: (chave de dedup, o que aconteceu, o que fazer). O jargão
+# técnico da exceção entra só no fim — quem recebe no celular precisa primeiro saber
+# que o backup parou e o que fazer a respeito (SPEC §4).
+_CRITICAL_TEXTS: tuple[tuple[type[BaseException], str, str, str], ...] = (
+    (
+        DiskError,
+        "disco",
+        "O backup parou: o disco de destino não está acessível.",
+        "Conecte o disco de backup e use 'Verificar agora' para retomar.",
+    ),
+    (
+        AuthError,
+        "auth",
+        "O backup parou: o app perdeu o acesso à pasta do Drive.",
+        "Confira se a pasta continua compartilhada com a conta de serviço e se a "
+        "chave não foi revogada.",
+    ),
+    (
+        ConfigError,
+        "config",
+        "O backup parou: a configuração está inválida.",
+        "Corrija as configurações e inicie o app novamente.",
+    ),
+)
+
+
 def _message_for(exc: BaseException) -> tuple[str, str]:
     """(chave de deduplicação, mensagem acionável) para um erro crítico."""
     detail = str(exc)
-    if isinstance(exc, DiskError):
-        return (
-            "disco",
-            f"{detail} Conecte o disco de backup e use 'Verificar agora' para retomar.",
-        )
-    if isinstance(exc, AuthError):
-        return (
-            "auth",
-            f"{detail} Confira se a pasta do Drive continua compartilhada com a conta "
-            "de serviço e se a chave não foi revogada.",
-        )
-    if isinstance(exc, ConfigError):
-        return ("config", f"{detail} Corrija o config.yaml e rode novamente.")
-    return ("critico", detail)
+    for kind, key, what, action in _CRITICAL_TEXTS:
+        if isinstance(exc, kind):
+            return key, f"{what}\n\nO que fazer: {action}\n\nDetalhe técnico: {detail}"
+    return "critico", f"O backup parou por um erro inesperado.\n\nDetalhe técnico: {detail}"
 
 
 class AlertManager:
@@ -136,7 +159,7 @@ class AlertManager:
 
         sent = self._notifier.notify(_TITLE, message, priority=priority, tags=tags)
         if sent:
-            self._state.record_event("INFO", "notify", f"{_MARKER_PREFIX}{key}] {message}")
+            self._state.record_event("INFO", _marker_category(key), message)
         return sent
 
     # --- Interno ----------------------------------------------------------
@@ -147,9 +170,8 @@ class AlertManager:
 
     def _recently_sent(self, key: str) -> bool:
         row = self._state.connection.execute(
-            "SELECT ts FROM events WHERE category='notify' AND message LIKE ? "
-            "ORDER BY id DESC LIMIT 1",
-            (f"{_MARKER_PREFIX}{key}]%",),
+            "SELECT ts FROM events WHERE category=? ORDER BY id DESC LIMIT 1",
+            (_marker_category(key),),
         ).fetchone()
         if row is None:
             return False

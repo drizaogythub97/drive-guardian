@@ -25,7 +25,9 @@ Em desenvolvimento, entrega por fases:
   alerta ntfy imediato nos críticos (com anti-spam), heartbeat (healthchecks.io),
   resumo semanal e **toda movimentação registrada** no SQLite — inclusive arquivos
   que sumiram do Drive, cuja cópia local é sempre mantida.
-- **Fase 3 — UI** — bandeja, janela de config, logs, "Verificar agora", startup do Windows.
+- **Fase 3 — UI ✅** — bandeja com três estados, janela de configuração com as quatro
+  abas (Conexão, Pastas, Parâmetros, Atividade), navegador de pastas do Drive, log de
+  atividade com filtro e exportação, "Verificar agora" e iniciar com o Windows.
 - **Fase 4 — Polimento GitHub** — OAuth de usuário, export de Docs nativos, READMEs, PyInstaller, testes.
 
 ## Início rápido (desenvolvedores)
@@ -52,6 +54,16 @@ python cli.py events -n 30     # log de movimentações (mesma fonte da futura U
 python cli.py summary [--send] # resumo semanal, opcionalmente enviado pelo ntfy
 python cli.py test-alert       # teste ponta a ponta do ntfy + heartbeat
 ```
+
+### Interface
+
+```bash
+pip install -e ".[ui]"   # PySide6
+python gui.py            # ícone na bandeja + janela de configuração
+```
+
+O app vive na bandeja: fechar a janela não para o backup. Para encerrar de verdade,
+use "Sair" no menu da bandeja.
 
 ### Configuração
 
