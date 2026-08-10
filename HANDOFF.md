@@ -8,9 +8,28 @@
 - **Fase 0 (Fundação):** ✅ concluída, validada por você, no `main`.
 - **Fase 1 (MVP headless):** ✅ **código completo no `main`** e **validação supervisionada
   100% concluída** (6/6 critérios provados em 10/08/2026).
-- **Fase 2 (Alertas):** ✅ **código completo no `main`** (commit `27592cc`), CI verde,
-  gate verde (**88 testes**). Critérios de aceite exercitados — detalhes abaixo.
-- **Aguardando:** aval do dono para iniciar a **Fase 3 (UI PySide6)**.
+- **Fase 2 (Alertas):** ✅ **código completo no `main`** (commit `27592cc`), CI verde.
+  Critérios de aceite exercitados — detalhes abaixo.
+- **Fase 3 (UI PySide6):** ✅ **código completo no `main`** (commit `5e6655f`), CI verde,
+  gate verde (**112 testes**). App aberto de verdade e rodou um ciclo completo sozinho.
+- **Aguardando:** aval do dono para iniciar a **Fase 4 (polimento GitHub)**.
+
+### Fase 3 — o que foi entregue (SPEC §5)
+
+| Peça | Onde | Observação |
+|---|---|---|
+| Bandeja 3 estados | `ui/tray.py`, `ui/icons.py` | Ícone desenhado em runtime com `QPainter` (nenhum `.ico` para o PyInstaller empacotar); verde/amarelo/vermelho + cinza pausado; tooltip repete o estado em texto |
+| Menu da bandeja | `ui/tray.py` | Abrir, Verificar agora, Pausar/Retomar, Sair |
+| Janela + 4 abas | `ui/main_window.py`, `ui/tabs/` | Conexão, Pastas, Parâmetros, Atividade |
+| Navegador de pastas do Drive | `ui/tabs/folders.py` | Raiz = `sharedWithMe` (a SA não tem Meu Drive); o ID salvo é traduzido para o nome real em segundo plano |
+| Log de atividade | `ui/tabs/activity.py` | Tabela de `events` com segmentado Tudo/Normal/Problemas, exportar log, KPIs do último ciclo vindos de `cycles` |
+| Startup do Windows | `ui/startup.py` | `HKCU\...\Run`; usa `pythonw.exe` para não abrir console no login |
+| Thread de sync | `ui/worker.py` | `SyncEngine` fora da thread da UI, com `State` próprio |
+| Tema | `ui/theme.py`, `ui/widgets.py` | Padrão "Minimalista" do dono **adaptado ao desktop** (valores "cheios"): escala tipográfica, cartão com cabeçalho + divisor, segmentado, sem ícone decorativo |
+
+**Fechar a janela não encerra o app** — ele volta para a bandeja e continua
+sincronizando; sair de verdade é pelo menu. Rodar: `python gui.py`
+(precisa de `pip install -e ".[ui]"`).
 
 ### Fase 2 — o que foi entregue (SPEC §4)
 
@@ -89,15 +108,14 @@ Para testar (e) o conteúdo precisa ser realmente diferente.
 
 ## ▶️ Próximo passo exato para retomar
 
-Fases 1 e 2 fechadas. **Pedir/obter o aval do dono e iniciar a Fase 3 (UI PySide6):**
-bandeja com 3 estados, janela com as 4 abas do SPEC §5 (Conexão, Pastas, Parâmetros,
-Atividade), "Verificar agora", startup do Windows. Não avançar sem o "ok" dele
-(regra de gate por fase).
+Fases 1, 2 e 3 fechadas em código. **Falta a validação da Fase 3 pelo dono** (SPEC §6-F3:
+"usuário leigo configura tudo pela UI sem editar YAML; app sobrevive a reboot e roda
+sozinho") — isto é, ele usar o `python gui.py`, mexer nas abas, salvar, ligar o startup
+e reiniciar a máquina.
 
-A aba **Atividade** já tem toda a fonte de dados pronta: `state.recent_events()` (com
-filtro por nível/categoria) e `state.recent_cycles()`. O `cli.py events` e o
-`cli.py status` são exatamente a mesma informação em texto — servem de referência
-para o que a tela deve mostrar. Strings de UI vão em `ui/strings.py` (PT-BR isoladas).
+Depois, com o aval dele, **Fase 4 (polimento GitHub)**: OAuth de usuário, export de Docs
+nativos, PyInstaller, e o spike do escopo `drive.file` + Google Picker (SPEC §7).
+Não avançar sem o "ok" (regra de gate por fase).
 
 Comando de captura de metadados remotos (reutilizável para futuros diffs):
 ```bash
@@ -124,8 +142,11 @@ Comando de captura de metadados (reutilizável):
 
 ## Ambiente e comandos
 
-- venv em `.venv`. Gate: `./.venv/Scripts/python.exe -m ruff check . && ... mypy core/ && ... pytest` (88 testes verdes).
+- venv em `.venv`. Gate: `ruff check . && mypy core/ ui/ gui.py cli.py && pytest`
+  (112 testes verdes). O `[tool.mypy] platform = "win32"` do `pyproject.toml` é o que faz
+  o `winreg` do `ui/startup.py` resolver também no Linux do CI.
 - `python cli.py list | sync | sync --dry-run | watch | status | events | summary | test-alert`.
+- `python gui.py` abre a interface (requer `pip install -e ".[ui]"`).
 - `gh` autenticado (`drizaogythub97`); CI (`.github/workflows/ci.yml`) roda o gate a cada push.
 
 ## Gotchas aprendidos
@@ -153,11 +174,13 @@ puro/leitura), `downloader` (atômico+retomada+`_versões/`), `verifier` (md5),
 `disk` (unidade/espaço), `watcher` (`changes.list`+`FolderResolver`), `sync` (`SyncEngine`:
 `run_once`/`watch`). `cli.py` fino. `ui/` só stubs (Fase 3).
 
-## Depois da Fase 2
-
-**Fase 3 — UI (PySide6):** bandeja (verde/amarelo/vermelho), 4 abas do SPEC §5,
-"Verificar agora", startup do Windows via `HKCU\...\Run`. Núcleo já expõe tudo que a UI
-precisa; `core/` continua proibido de importar `ui/`.
+## Depois da Fase 3
 
 **Fase 4 — Polimento GitHub:** OAuth de usuário, export de Docs nativos, PyInstaller,
 spike do escopo `drive.file` + Google Picker (SPEC §7).
+
+Pontos já mapeados que a Fase 4 encosta:
+- `ui/startup.py:launch_command()` já trata o caso empacotado (`sys.frozen`).
+- `ui/icons.py` desenha o ícone em runtime — o PyInstaller não precisa de recursos.
+- `core/auth.py` tem o `UserOAuthAuth` como stub, com a interface já definida.
+- `sync.export_google_docs` / `export_formats` existem na config e são ignorados no core.
