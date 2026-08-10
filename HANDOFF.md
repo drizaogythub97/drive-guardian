@@ -1,51 +1,68 @@
 # Drive Guardian — Handoff de sprint
 
 > Documento de continuidade entre sessões. Sem segredos (valores privados em
-> `secrets/valores.md`, fora do git). Atualizado ao **encerrar a sprint em 08/08/2026**.
+> `secrets/valores.md`, fora do git). Atualizado em **10/08/2026**.
 
 ## Onde estamos
 
 - **Fase 0 (Fundação):** ✅ concluída, validada por você, no `main`.
-- **Fase 1 (MVP headless):** ✅ **código completo e no `main`** (commit `1797f39`), CI verde.
-  Validação supervisionada **em andamento** — faltam 2 dos 6 critérios.
+- **Fase 1 (MVP headless):** ✅ **código completo no `main`** e **validação supervisionada
+  100% concluída** (6/6 critérios provados em 10/08/2026). CI verde, gate verde (39 testes).
+- **Aguardando:** aval do dono para iniciar a **Fase 2 (Alertas)**.
 
-### Validação da Fase 1 (SPEC §6-F1) — estado atual
+### Validação da Fase 1 (SPEC §6-F1) — CONCLUÍDA
 
 | Critério | Descrição | Status |
 |---|---|---|
 | a | 1º sync clona a árvore inteira | ✅ provado (118 arquivos, 12.6 GB baixados) |
 | b | 2º sync não baixa nada | ✅ provado (0 baixados, DB 118 `synced`) |
 | c | Queda no meio → retoma, md5 confere | ✅ provado (kill real → resync transferiu só o restante via `Range`/206; md5 confere) |
+| d | Apagar no Drive → cópia local intacta | ✅ provado (10/08 — ver abaixo) |
+| e | Modificar no Drive → local novo + antigo em `_versões/` | ✅ provado (10/08 — ver abaixo) |
 | f | `--dry-run` não grava nada | ✅ provado (sem `state.db`, sem destino, sem log) |
-| **e** | **Modificar no Drive → local novo + antigo em `_versões/`** | ⏳ **PENDENTE** (aguardando ação manual no Drive) |
-| **d** | **Apagar no Drive → cópia local intacta** | ⏳ **PENDENTE** (aguardando ação manual no Drive) |
 
 Além disso: **fidelidade** verificada — 10 arquivos aleatórios, md5 local == `md5Checksum` do Drive (10/10).
 
+#### Evidências de (d) — exclusão (10/08/2026)
+
+`ScreenRecording_11-05-2025 09-25-11_1.mp4` (57 MB) foi para a lixeira do Drive.
+Detecção automática via diff contra o snapshot `remote_meta.json` (118 → 117 remotos).
+
+- `cli.py sync` → `0 baixados, 0 versões, 0 falhas`; cópia local **intacta**,
+  md5 `ab7de9cab80d837539423f8857fcabbf` idêntico ao original.
+- `D:\DriveGuardian` ficou com **118** arquivos enquanto o remoto tem 117 (política cumulativa).
+- Caminho do `watch` também exercitado (rebobinando o `page_token` para reprocessar as
+  mudanças reais): log `Item removido/lixeira no Drive; mantido localmente (fileId=…)`,
+  nada apagado, nada baixado.
+
+#### Evidências de (e) — versionamento (10/08/2026)
+
+`ScreenRecording_05-10-2026 19-24-57_1.mp4` recebeu nova versão no Drive
+(mesmo `file_id`, md5 `428721e9…` → `742e92ec…`, 234.790.361 → 1.920.357 bytes).
+
+- `cli.py sync` → `1 baixado, 1 versão, 0 falhas, 1.8 MB transferidos`.
+- Novo local: md5 `742e92ec523f44d5559abadd5eea318a` == md5 novo do Drive ✅
+- Versão anterior preservada em
+  `D:\DriveGuardian\_versões\ScreenRecording_05-10-2026 19-24-57_1.20260810T104029.mp4`,
+  md5 `428721e9…` (bit a bit igual ao original) ✅
+- Nenhum `.part` órfão; `state.db` atualizado para o novo md5/size, 118 `synced`.
+- 2º ciclo logo em seguida: `0 baixados, 0 versões` e `_versões/` continua com **1**
+  arquivo → idempotência do versionamento confirmada.
+
+**Armadilha observada:** subir *o mesmo arquivo* em "Gerenciar versões" muda o
+`modifiedTime`/`version` no Drive mas **não** o md5 — o app corretamente não faz nada.
+Para testar (e) o conteúdo precisa ser realmente diferente.
+
 ## ▶️ Próximo passo exato para retomar
 
-Estávamos **pausados aguardando o dono fazer, no site do Drive** (pasta monitorada):
+Fase 1 fechada. **Pedir/obter o aval do dono e iniciar a Fase 2 (Alertas):** níveis de
+erro (SPEC §4), ntfy, heartbeat healthchecks.io, resumo semanal. Não avançar sem o "ok"
+dele (regra de gate por fase).
 
-1. **Editar 1 arquivo** — botão direito → *Gerenciar versões* → *Fazer upload de nova
-   versão* (mantém o mesmo `file_id`, muda o md5). → prova critério **(e)**.
-2. **Apagar 1 arquivo** — mover um arquivo (já baixado) para a lixeira do Drive.
-   Temos os 118 localmente; o app nunca apaga local; recuperável na lixeira do Drive.
-   → prova critério **(d)**.
-
-Quando o dono confirmar ("pronto"), o agente deve:
-
-1. **Re-capturar** os metadados remotos e **comparar com `remote_meta.json`** (snapshot
-   "antes", git-ignored, na raiz do repo — mapa `{nome: {md5, size, id}}` dos 118 arquivos)
-   para detectar automaticamente qual arquivo foi **editado** (mesmo `id`, md5 diferente)
-   e qual foi **apagado** (sumiu da árvore).
-2. Rodar `python cli.py sync` (um ciclo completo — reconciliação via `files.list`).
-3. **Provar (e):** o arquivo editado foi rebaixado; a versão local anterior está em
-   `D:\DriveGuardian\_versões\...\<nome>.<timestamp>.<ext>`; o novo md5 local == novo md5 do Drive.
-4. **Provar (d):** o arquivo apagado **continua** em `D:\DriveGuardian\` com o md5 original
-   (comparar com `remote_meta.json`). Obs.: no `sync` completo o apagado apenas some da
-   árvore remota e é ignorado (local intacto); o log "removido; mantido localmente" só
-   aparece no modo `watch` (via `changes.list`).
-5. Relatório final da Fase 1 → pedir aval do dono para a **Fase 2**.
+Comando de captura de metadados remotos (reutilizável para futuros diffs):
+```bash
+./.venv/Scripts/python.exe -c "import json;from core.auth import build_auth;from core.config import load_config;from core.drive import build_service,build_tree,iter_files;cfg=load_config('config.yaml');svc=build_service(build_auth(cfg.auth));fs=iter_files(build_tree(svc,cfg.sync.pairs[0].drive_folder_id));json.dump({f.name:{'md5':f.md5,'size':f.size,'id':f.id} for f in fs},open('remote_meta.json','w'));print(len(fs))"
+```
 
 Comando de captura de metadados (reutilizável):
 ```bash
@@ -54,11 +71,15 @@ Comando de captura de metadados (reutilizável):
 
 ## Estado concreto da máquina (não versionado)
 
-- **Backup real existe:** `D:\DriveGuardian\` com os 118 arquivos (12.6 GB).
-- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 118 `synced`. Logs em
-  `%LOCALAPPDATA%\DriveGuardian\logs\drive-guardian.log`.
+- **Backup real existe:** `D:\DriveGuardian\` com **118** arquivos no topo (o remoto tem
+  **117** — a diferença é o arquivo apagado no Drive e preservado localmente), mais
+  `_versões\` com 1 arquivo (a versão antiga do teste (e)). ~12.4 GB.
+- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 118 `synced`, `page_token` = 133.
+  Logs em `%LOCALAPPDATA%\DriveGuardian\logs\drive-guardian.log`.
 - **`config.yaml`** real na raiz (git-ignored); valores em `secrets/valores.md`.
-- **`remote_meta.json`** na raiz (git-ignored) = snapshot "antes" para o diff de (d)/(e).
+- **`remote_meta.json`** na raiz (git-ignored) = snapshot dos metadados remotos, já
+  **atualizado para o estado pós-validação** (117 arquivos) — serve de baseline para
+  o próximo diff.
 
 ## Ambiente e comandos
 
@@ -74,6 +95,14 @@ Comando de captura de metadados (reutilizável):
 - **Console cp1252:** `cli.py` força stdout/stderr para UTF-8 (árvore usa `├└│—`).
 - **Retomada:** o downloader usa `AuthorizedSession` + cabeçalho `Range`; o Drive
   responde 206 e concatenamos no `.part`. 416 (part já completo) é tratado.
+- **Nova versão idêntica no Drive** muda `modifiedTime`/`version` mas não o `md5Checksum`
+  → o app (corretamente) não baixa nada. Só md5 diferente dispara o versionamento.
+- **Reprocessar mudanças passadas** (útil em teste): os `pageToken` do Drive pessoal são
+  inteiros sequenciais; dá para rebobinar `sync_state.page_token` para um valor anterior
+  e rodar um ciclo incremental sobre mudanças já ocorridas.
+- **`sync` completo vs. `watch`:** no `sync` o arquivo apagado apenas some da árvore
+  remota (local intacto, sem log específico); a mensagem "removido; mantido localmente"
+  vem do `watch` (via `changes.list`). A linha dele no `state.db` permanece `synced`.
 
 ## Arquitetura (resumo)
 
