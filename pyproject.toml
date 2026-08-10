@@ -48,6 +48,9 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
 python_version = "3.12"
+# App de Windows: fixa a plataforma para o `winreg` (ui/startup.py) existir também
+# quando o gate roda no Linux do CI.
+platform = "win32"
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
