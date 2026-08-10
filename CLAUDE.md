@@ -50,4 +50,15 @@ ruff check . && mypy core/ && pytest          # gate antes de todo commit
 python cli.py sync --dry-run                  # simula sem baixar
 python cli.py sync                            # ciclo único
 python cli.py watch                           # loop contínuo (intervalo da config)
+python cli.py status                          # últimos ciclos e arquivos por status
+python cli.py events -n 30                    # log de movimentações (fonte da UI)
+python cli.py summary [--send]                # resumo semanal
+python cli.py test-alert                      # testa ntfy + heartbeat
 ```
+
+## Registro de movimentações (decisão do dono, 10/08/2026)
+
+**Toda** movimentação (download, versionamento, falha, arquivo que sumiu do Drive ou
+voltou, ciclo executado) tem de ficar registrada no SQLite para aparecer no log da UI.
+Nada de movimentação visível só no console: se um caminho de código muda o estado do
+backup, ele grava evento em `events` — e ciclos vão para a tabela `cycles`.

@@ -19,6 +19,9 @@ STATUS_PENDING = "pending"
 STATUS_DOWNLOADING = "downloading"
 STATUS_FAILED = "failed"
 STATUS_VERSIONED = "versioned"
+# Sumiu do Drive (lixeira/exclusão). A cópia local é mantida (regra inviolável 1);
+# o status existe só para registro e exibição na UI.
+STATUS_REMOTE_DELETED = "removido_no_drive"
 QUEUEABLE = (STATUS_PENDING, STATUS_DOWNLOADING, STATUS_FAILED)
 
 
@@ -36,6 +39,24 @@ class FileRow:
     fail_count: int
     last_error: str | None
     updated_at: str
+    first_failed_at: str | None = None
+
+
+@dataclass(frozen=True)
+class CycleRow:
+    """Linha da tabela ``cycles`` — um ciclo de sincronização já encerrado."""
+
+    id: int
+    started_at: str
+    finished_at: str
+    kind: str
+    downloaded: int
+    versioned: int
+    failed: int
+    remote_deleted: int
+    bytes_downloaded: int
+    ok: int
+    error: str | None
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -46,16 +67,19 @@ CREATE TABLE IF NOT EXISTS files (
   size          INTEGER,
   modified_time TEXT,               -- modifiedTime do Drive (RFC3339)
   status        TEXT NOT NULL,      -- synced | pending | downloading | failed | versioned
+                                    -- | removido_no_drive
   fail_count    INTEGER DEFAULT 0,
   last_error    TEXT,
-  updated_at    TEXT NOT NULL
+  updated_at    TEXT NOT NULL,
+  first_failed_at TEXT              -- início da falha atual (Nível 2: >24h notifica)
 );
 
 CREATE TABLE IF NOT EXISTS sync_state (   -- singleton (id=1)
   id             INTEGER PRIMARY KEY CHECK (id=1),
   page_token     TEXT,             -- changes.list startPageToken corrente
   last_full_scan TEXT,             -- última reconciliação completa
-  last_cycle_ok  TEXT
+  last_cycle_ok  TEXT,
+  last_summary   TEXT              -- envio do último resumo semanal
 );
 
 CREATE TABLE IF NOT EXISTS events (       -- alimenta a aba de logs da UI e o resumo semanal
@@ -67,9 +91,31 @@ CREATE TABLE IF NOT EXISTS events (       -- alimenta a aba de logs da UI e o re
   file_id  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS cycles (       -- um registro por ciclo (painel da UI + resumo)
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at     TEXT NOT NULL,
+  finished_at    TEXT NOT NULL,
+  kind           TEXT NOT NULL,    -- completo | incremental
+  downloaded     INTEGER NOT NULL DEFAULT 0,
+  versioned      INTEGER NOT NULL DEFAULT 0,
+  failed         INTEGER NOT NULL DEFAULT 0,
+  remote_deleted INTEGER NOT NULL DEFAULT 0,
+  bytes_downloaded INTEGER NOT NULL DEFAULT 0,
+  ok             INTEGER NOT NULL DEFAULT 1,
+  error          TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_files_status ON files(status);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS idx_cycles_finished ON cycles(finished_at);
 """
+
+# Colunas acrescentadas depois do schema original (Fase 2): aplicadas com ALTER TABLE
+# em bancos que já existem, já que ``CREATE TABLE IF NOT EXISTS`` não as adicionaria.
+_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("files", "first_failed_at", "ALTER TABLE files ADD COLUMN first_failed_at TEXT"),
+    ("sync_state", "last_summary", "ALTER TABLE sync_state ADD COLUMN last_summary TEXT"),
+)
 
 
 def _utcnow() -> str:
@@ -88,6 +134,23 @@ def _row_to_file(row: sqlite3.Row) -> FileRow:
         fail_count=row["fail_count"],
         last_error=row["last_error"],
         updated_at=row["updated_at"],
+        first_failed_at=row["first_failed_at"],
+    )
+
+
+def _row_to_cycle(row: sqlite3.Row) -> CycleRow:
+    return CycleRow(
+        id=row["id"],
+        started_at=row["started_at"],
+        finished_at=row["finished_at"],
+        kind=row["kind"],
+        downloaded=row["downloaded"],
+        versioned=row["versioned"],
+        failed=row["failed"],
+        remote_deleted=row["remote_deleted"],
+        bytes_downloaded=row["bytes_downloaded"],
+        ok=row["ok"],
+        error=row["error"],
     )
 
 
@@ -110,6 +173,14 @@ class State:
                 "INSERT OR IGNORE INTO sync_state (id, page_token, last_full_scan, last_cycle_ok) "
                 "VALUES (1, NULL, NULL, NULL)"
             )
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Aplica colunas novas em bancos criados por versões anteriores."""
+        for table, column, ddl in _MIGRATIONS:
+            existing = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                self._conn.execute(ddl)
 
     @property
     def connection(self) -> sqlite3.Connection:
@@ -140,6 +211,87 @@ class State:
     def mark_cycle_ok(self) -> None:
         with self._conn:
             self._conn.execute("UPDATE sync_state SET last_cycle_ok=? WHERE id=1", (_utcnow(),))
+
+    def get_last_cycle_ok(self) -> str | None:
+        row = self._conn.execute("SELECT last_cycle_ok FROM sync_state WHERE id=1").fetchone()
+        return row["last_cycle_ok"] if row else None
+
+    def get_last_summary(self) -> str | None:
+        row = self._conn.execute("SELECT last_summary FROM sync_state WHERE id=1").fetchone()
+        return row["last_summary"] if row else None
+
+    def set_last_summary(self, when: str | None = None) -> None:
+        with self._conn:
+            self._conn.execute(
+                "UPDATE sync_state SET last_summary=? WHERE id=1", (when or _utcnow(),)
+            )
+
+    # --- Tabela cycles ----------------------------------------------------
+
+    def record_cycle(
+        self,
+        *,
+        started_at: str,
+        kind: str,
+        downloaded: int = 0,
+        versioned: int = 0,
+        failed: int = 0,
+        remote_deleted: int = 0,
+        bytes_downloaded: int = 0,
+        ok: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """Registra um ciclo encerrado (alimenta o painel da UI e o resumo semanal)."""
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO cycles (started_at, finished_at, kind, downloaded, versioned,
+                                    failed, remote_deleted, bytes_downloaded, ok, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (started_at, _utcnow(), kind, downloaded, versioned, failed,
+                 remote_deleted, bytes_downloaded, int(ok), error),
+            )
+
+    def cycles_since(self, since: str) -> list[CycleRow]:
+        rows = self._conn.execute(
+            "SELECT * FROM cycles WHERE finished_at >= ? ORDER BY id", (since,)
+        ).fetchall()
+        return [_row_to_cycle(r) for r in rows]
+
+    def recent_cycles(self, limit: int = 10) -> list[CycleRow]:
+        rows = self._conn.execute(
+            "SELECT * FROM cycles ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [_row_to_cycle(r) for r in rows]
+
+    # --- Consulta de eventos (aba Atividade da UI) ------------------------
+
+    def recent_events(
+        self, limit: int = 50, *, levels: tuple[str, ...] = (), category: str | None = None
+    ) -> list[sqlite3.Row]:
+        """Últimos eventos, opcionalmente filtrados por nível e categoria."""
+        clauses: list[str] = []
+        params: list[object] = []
+        if levels:
+            clauses.append(f"level IN ({','.join('?' * len(levels))})")
+            params.extend(lv.upper() for lv in levels)
+        if category:
+            clauses.append("category = ?")
+            params.append(category)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        return list(
+            self._conn.execute(f"SELECT * FROM events{where} ORDER BY id DESC LIMIT ?", params)
+        )
+
+    def count_events_since(self, since: str, *, levels: tuple[str, ...] = ()) -> int:
+        clause = f" AND level IN ({','.join('?' * len(levels))})" if levels else ""
+        params: list[object] = [since, *(lv.upper() for lv in levels)]
+        row = self._conn.execute(
+            f"SELECT COUNT(*) AS n FROM events WHERE ts >= ?{clause}", params
+        ).fetchone()
+        return int(row["n"])
 
     # --- Tabela files -----------------------------------------------------
 
@@ -217,6 +369,7 @@ class State:
                     status=excluded.status,
                     fail_count=0,
                     last_error=NULL,
+                    first_failed_at=NULL,
                     updated_at=excluded.updated_at
                 """,
                 (file_id, drive_path, local_path, md5, size, modified_time,
@@ -224,13 +377,43 @@ class State:
             )
 
     def record_failed(self, file_id: str, error: str) -> None:
-        """Incrementa ``fail_count`` e guarda o último erro (status=failed)."""
+        """Incrementa ``fail_count`` e guarda o último erro (status=failed).
+
+        Carimba ``first_failed_at`` na primeira falha da sequência atual — é o que
+        permite ao Nível 2 saber que um arquivo já falha há mais de 24h.
+        """
+        now = _utcnow()
         with self._conn:
             self._conn.execute(
-                "UPDATE files SET status=?, fail_count=fail_count+1, last_error=?, updated_at=? "
-                "WHERE file_id=?",
-                (STATUS_FAILED, error, _utcnow(), file_id),
+                "UPDATE files SET status=?, fail_count=fail_count+1, last_error=?, updated_at=?, "
+                "first_failed_at=COALESCE(first_failed_at, ?) WHERE file_id=?",
+                (STATUS_FAILED, error, now, now, file_id),
             )
+
+    def record_remote_deleted(self, file_id: str) -> None:
+        """Marca que o arquivo sumiu do Drive. **Não** toca na cópia local."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE files SET status=?, updated_at=? WHERE file_id=?",
+                (STATUS_REMOTE_DELETED, _utcnow(), file_id),
+            )
+
+    def restore_remote_deleted(self, file_id: str) -> None:
+        """Arquivo voltou a aparecer no Drive: volta a contar como sincronizado."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE files SET status=?, updated_at=? WHERE file_id=? AND status=?",
+                (STATUS_SYNCED, _utcnow(), file_id, STATUS_REMOTE_DELETED),
+            )
+
+    def failing_since(self, cutoff: str) -> list[FileRow]:
+        """Arquivos em falha cuja primeira falha é anterior a ``cutoff`` (Nível 2)."""
+        rows = self._conn.execute(
+            "SELECT * FROM files WHERE status=? AND first_failed_at IS NOT NULL "
+            "AND first_failed_at <= ? ORDER BY first_failed_at",
+            (STATUS_FAILED, cutoff),
+        ).fetchall()
+        return [_row_to_file(r) for r in rows]
 
     def close(self) -> None:
         self._conn.close()

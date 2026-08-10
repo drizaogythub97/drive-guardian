@@ -36,6 +36,14 @@ class Plan:
     def bytes_to_download(self) -> int:
         return sum(item.file.size or 0 for item in self.to_download)
 
+    def all_remote_files(self) -> list[DriveFile]:
+        """Todos os arquivos vistos no Drive neste plano (baixar + em dia + nativos).
+
+        É a lista usada para descobrir o que **sumiu** do Drive: qualquer arquivo
+        conhecido no estado que não esteja aqui deixou de existir lá.
+        """
+        return [item.file for item in self.to_download] + self.synced + self.skipped_native
+
 
 def local_path_for(pair: SyncPair, file: DriveFile) -> Path:
     """Caminho local absoluto para um arquivo remoto, sob a raiz do par."""

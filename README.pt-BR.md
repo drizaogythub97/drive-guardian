@@ -21,7 +21,10 @@ Em desenvolvimento, entrega por fases:
 - **Fase 1 — MVP headless ✅** — reconciliação completa, fila de download, download
   atômico (`.part` → md5 → rename) com retomada via Range, `_versões/` para
   modificados, polling incremental `changes.list` e CLI `sync` / `watch` / `--dry-run`.
-- **Fase 2 — Alertas** — níveis de erro, ntfy, heartbeat (healthchecks.io), resumo semanal.
+- **Fase 2 — Alertas ✅** — três níveis de erro com retry/backoff para transitórios,
+  alerta ntfy imediato nos críticos (com anti-spam), heartbeat (healthchecks.io),
+  resumo semanal e **toda movimentação registrada** no SQLite — inclusive arquivos
+  que sumiram do Drive, cuja cópia local é sempre mantida.
 - **Fase 3 — UI** — bandeja, janela de config, logs, "Verificar agora", startup do Windows.
 - **Fase 4 — Polimento GitHub** — OAuth de usuário, export de Docs nativos, READMEs, PyInstaller, testes.
 
@@ -36,6 +39,18 @@ pip install -e ".[dev]"
 
 copy config.example.yaml config.yaml   # depois edite
 python cli.py list                      # imprime a árvore da pasta monitorada
+```
+
+### CLI
+
+```bash
+python cli.py sync --dry-run   # simula: não baixa nem grava nada
+python cli.py sync             # um ciclo completo
+python cli.py watch            # loop contínuo no intervalo da config
+python cli.py status           # últimos ciclos, arquivos por status, alertas
+python cli.py events -n 30     # log de movimentações (mesma fonte da futura UI)
+python cli.py summary [--send] # resumo semanal, opcionalmente enviado pelo ntfy
+python cli.py test-alert       # teste ponta a ponta do ntfy + heartbeat
 ```
 
 ### Configuração

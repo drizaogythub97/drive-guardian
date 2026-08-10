@@ -20,7 +20,10 @@ Under active development, phased delivery:
 - **Phase 1 — Headless MVP ✅** — full reconciliation, download queue, atomic
   download (`.part` → md5 → rename) with Range resume, `_versões/` for modified
   files, incremental `changes.list` polling, and `sync` / `watch` / `--dry-run` CLI.
-- **Phase 2 — Alerts** — error levels, ntfy, healthchecks.io heartbeat, weekly summary.
+- **Phase 2 — Alerts ✅** — three error levels with transient retry/backoff, immediate
+  ntfy alerts for critical failures (with anti-spam), healthchecks.io heartbeat,
+  weekly summary, and every movement recorded in SQLite (including files removed
+  from Drive, whose local copies are always kept).
 - **Phase 3 — UI** — tray, config window, logs, "Check now", Windows startup.
 - **Phase 4 — GitHub polish** — user OAuth, native Docs export, READMEs, PyInstaller, tests.
 
@@ -35,6 +38,18 @@ pip install -e ".[dev]"
 
 cp config.example.yaml config.yaml   # then edit
 python cli.py list                    # prints the monitored Drive folder tree
+```
+
+### CLI
+
+```bash
+python cli.py sync --dry-run   # simulate: downloads and writes nothing
+python cli.py sync             # one full cycle
+python cli.py watch            # continuous loop at the configured interval
+python cli.py status           # last cycles, files per status, alert settings
+python cli.py events -n 30     # movement log (same data the UI will show)
+python cli.py summary [--send] # weekly summary, optionally pushed to ntfy
+python cli.py test-alert       # end-to-end check of ntfy + heartbeat
 ```
 
 ### Configuration
