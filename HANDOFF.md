@@ -7,8 +7,42 @@
 
 - **Fase 0 (Fundação):** ✅ concluída, validada por você, no `main`.
 - **Fase 1 (MVP headless):** ✅ **código completo no `main`** e **validação supervisionada
-  100% concluída** (6/6 critérios provados em 10/08/2026). CI verde, gate verde (39 testes).
-- **Aguardando:** aval do dono para iniciar a **Fase 2 (Alertas)**.
+  100% concluída** (6/6 critérios provados em 10/08/2026).
+- **Fase 2 (Alertas):** ✅ **código completo no `main`** (commit `27592cc`), CI verde,
+  gate verde (**88 testes**). Critérios de aceite exercitados — detalhes abaixo.
+- **Aguardando:** aval do dono para iniciar a **Fase 3 (UI PySide6)**.
+
+### Fase 2 — o que foi entregue (SPEC §4)
+
+| Peça | Onde | Observação |
+|---|---|---|
+| Níveis de erro 1/2/3 | `core/errors.py` | Classifica exceção de terceiros por status HTTP: 429/5xx → transitório; 401/403 → crítico; demais 4xx → degradado |
+| Retry com backoff | `core/retry.py` | 1 → 5 → 30 min, máx. 3 tentativas; só transitórios; `sleep` injetável nos testes |
+| Notificador ntfy | `core/notifier/ntfy.py` | POST no tópico, headers Title/Priority/Tags; **falha de envio nunca derruba o ciclo** |
+| Heartbeat | `core/heartbeat.py` | `ping()` só após ciclo bem-sucedido; `/fail` em erro crítico |
+| Política de alerta | `core/alerts.py` | Crítico imediato (priority=high, texto acionável em PT-BR); degradado só após 24h de falha; **anti-spam persistido em `events`** (marcador `[alerta:<chave>]`), sobrevive a reinício |
+| Resumo semanal | `core/summary.py` | Números vêm da tabela `cycles`; agendamento preguiçoso — se o PC estava desligado no domingo 20h, sai no primeiro ciclo depois |
+| Registro de movimentações | `core/sync.py` | Detecta no `sync` completo o que sumiu do Drive → status `removido_no_drive` + evento; restaura se voltar; grava cada ciclo em `cycles` |
+| CLI de inspeção | `cli.py` | `status`, `events`, `summary [--send]`, `test-alert` |
+
+**Decisão do dono (10/08):** toda movimentação precisa ficar registrada para aparecer no
+log da UI. Antes, no `sync` completo, um arquivo apagado no Drive sumia em silêncio —
+agora vira status + evento. Registrado também em `CLAUDE.md`.
+
+### Validação da Fase 2 (SPEC §6-F2)
+
+| Critério | Status |
+|---|---|
+| Credencial inválida → ntfy em <1 min | ✅ exercitado com credencial **simulada** (config de teste com chave quebrada): erro Nível 3 → notificação no celular na hora. Revogação real da SA não foi feita (destrutiva, decisão sua) |
+| App desligado → healthchecks alerta após o period | ⚠️ **parcial** — o caminho `/fail` foi disparado e o check voltou ao verde com um ping ok. Falta você conferir no painel do healthchecks.io se o *period* está como intervalo + 15 min de folga e deixar o app parado além disso |
+| Resumo semanal chega | ✅ enviado de verdade (`cli.py summary --send`), recebido no tópico ntfy |
+
+Extra provado na prática: **anti-spam** (2ª falha idêntica em seguida gera log mas
+**não** gera notificação) e **migração de schema** no banco real da Fase 1 sem perda.
+
+**Cuidado tomado:** o marcador de dedup `[alerta:auth]` gerado pelo teste foi apagado do
+`state.db` para não silenciar um alerta de credencial **real** nas 6 h seguintes. Os dois
+eventos de log do teste (`Nível 3 (auth): …`) foram mantidos — são registro honesto.
 
 ### Validação da Fase 1 (SPEC §6-F1) — CONCLUÍDA
 
@@ -55,9 +89,15 @@ Para testar (e) o conteúdo precisa ser realmente diferente.
 
 ## ▶️ Próximo passo exato para retomar
 
-Fase 1 fechada. **Pedir/obter o aval do dono e iniciar a Fase 2 (Alertas):** níveis de
-erro (SPEC §4), ntfy, heartbeat healthchecks.io, resumo semanal. Não avançar sem o "ok"
-dele (regra de gate por fase).
+Fases 1 e 2 fechadas. **Pedir/obter o aval do dono e iniciar a Fase 3 (UI PySide6):**
+bandeja com 3 estados, janela com as 4 abas do SPEC §5 (Conexão, Pastas, Parâmetros,
+Atividade), "Verificar agora", startup do Windows. Não avançar sem o "ok" dele
+(regra de gate por fase).
+
+A aba **Atividade** já tem toda a fonte de dados pronta: `state.recent_events()` (com
+filtro por nível/categoria) e `state.recent_cycles()`. O `cli.py events` e o
+`cli.py status` são exatamente a mesma informação em texto — servem de referência
+para o que a tela deve mostrar. Strings de UI vão em `ui/strings.py` (PT-BR isoladas).
 
 Comando de captura de metadados remotos (reutilizável para futuros diffs):
 ```bash
@@ -74,7 +114,8 @@ Comando de captura de metadados (reutilizável):
 - **Backup real existe:** `D:\DriveGuardian\` com **118** arquivos no topo (o remoto tem
   **117** — a diferença é o arquivo apagado no Drive e preservado localmente), mais
   `_versões\` com 1 arquivo (a versão antiga do teste (e)). ~12.4 GB.
-- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 118 `synced`, `page_token` = 133.
+- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 117 `synced` + 1 `removido_no_drive`
+  (o arquivo apagado no Drive, cópia local intacta).
   Logs em `%LOCALAPPDATA%\DriveGuardian\logs\drive-guardian.log`.
 - **`config.yaml`** real na raiz (git-ignored); valores em `secrets/valores.md`.
 - **`remote_meta.json`** na raiz (git-ignored) = snapshot dos metadados remotos, já
@@ -83,8 +124,8 @@ Comando de captura de metadados (reutilizável):
 
 ## Ambiente e comandos
 
-- venv em `.venv`. Gate: `./.venv/Scripts/python.exe -m ruff check . && ... mypy core/ && ... pytest` (39 testes verdes).
-- `python cli.py list | sync | sync --dry-run | watch`.
+- venv em `.venv`. Gate: `./.venv/Scripts/python.exe -m ruff check . && ... mypy core/ && ... pytest` (88 testes verdes).
+- `python cli.py list | sync | sync --dry-run | watch | status | events | summary | test-alert`.
 - `gh` autenticado (`drizaogythub97`); CI (`.github/workflows/ci.yml`) roda o gate a cada push.
 
 ## Gotchas aprendidos
@@ -112,7 +153,11 @@ puro/leitura), `downloader` (atômico+retomada+`_versões/`), `verifier` (md5),
 `disk` (unidade/espaço), `watcher` (`changes.list`+`FolderResolver`), `sync` (`SyncEngine`:
 `run_once`/`watch`). `cli.py` fino. `ui/` só stubs (Fase 3).
 
-## Depois da Fase 1
+## Depois da Fase 2
 
-**Fase 2 — Alertas:** níveis de erro (SPEC §4), ntfy (tópico em `secrets/valores.md`),
-heartbeat healthchecks.io (URL em `secrets/valores.md`), resumo semanal.
+**Fase 3 — UI (PySide6):** bandeja (verde/amarelo/vermelho), 4 abas do SPEC §5,
+"Verificar agora", startup do Windows via `HKCU\...\Run`. Núcleo já expõe tudo que a UI
+precisa; `core/` continua proibido de importar `ui/`.
+
+**Fase 4 — Polimento GitHub:** OAuth de usuário, export de Docs nativos, PyInstaller,
+spike do escopo `drive.file` + Google Picker (SPEC §7).
