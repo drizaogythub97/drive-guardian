@@ -1,11 +1,11 @@
 # Drive Guardian — Handoff de sprint
 
 > Documento de continuidade entre sessões. Sem segredos (valores privados em
-> `secrets/valores.md`, fora do git). **Sprint encerrada em 10/08/2026.**
+> `secrets/valores.md`, fora do git). **Sprint encerrada em 11/08/2026.**
 >
-> **Resumo de uma linha:** Fases 0–3 completas em código no `main` (CI verde, 112
-> testes); pendente a validação da Fase 3 pelo dono ("fazemos os testes mais tarde")
-> e, depois, o aval para a Fase 4.
+> **Resumo de uma linha:** Fases 0–3 completas e **validadas** (só falta o dono fazer o
+> teste de reboot); **Fase 4 autorizada** e ainda não começada — o próximo agente pode
+> pegar o item 1 da lista em "Próximo passo exato".
 
 ## Onde estamos
 
@@ -14,9 +14,11 @@
   100% concluída** (6/6 critérios provados em 10/08/2026).
 - **Fase 2 (Alertas):** ✅ **código completo no `main`** (commit `27592cc`), CI verde.
   Critérios de aceite exercitados — detalhes abaixo.
-- **Fase 3 (UI PySide6):** ✅ **código completo no `main`** (commit `5e6655f`), CI verde,
-  gate verde (**112 testes**). App aberto de verdade e rodou um ciclo completo sozinho.
-- **Aguardando:** aval do dono para iniciar a **Fase 4 (polimento GitHub)**.
+- **Fase 3 (UI PySide6):** ✅ **código completo** (`5e6655f`) e **validada pelo dono em
+  11/08/2026**, com 5 defeitos achados e corrigidos em `94034d1`. Gate verde
+  (**115 testes**). Pendente só o item 7 do roteiro (reboot), que ele fará depois.
+- **Fase 4 (polimento GitHub):** 🔓 **autorizada em 11/08/2026** ("seguimos as próximas
+  fases"), **nenhuma linha escrita ainda**. Ordem combinada em "Próximo passo exato".
 
 ### Fase 3 — o que foi entregue (SPEC §5)
 
@@ -34,6 +36,31 @@
 **Fechar a janela não encerra o app** — ele volta para a bandeja e continua
 sincronizando; sair de verdade é pelo menu. Rodar: `python gui.py`
 (precisa de `pip install -e ".[ui]"`).
+
+### Validação da Fase 3 (11/08/2026) — CONCLUÍDA, menos o reboot
+
+O dono percorreu o roteiro na máquina dele. Aprovados: janela e bandeja, "Testar
+conexão", navegador de pastas, "Enviar aviso de teste" (chegou no celular), aba
+Atividade inteira (filtros, KPIs, exportar log) e todo o menu da bandeja
+(Verificar agora, Pausar/Retomar, X que não fecha o app). **Falta só o item 7,
+reiniciar o Windows** — ele disse que faz depois e avisa se falhar.
+
+Enquanto a janela ficou aberta o app provou o principal sozinho: às 12:44 UTC de
+11/08 baixou **50 arquivos novos** que tinham aparecido no Drive, sem ninguém pedir
+(`Ciclo completo: 50 baixados, 0 versões, 0 falhas`).
+
+#### Os 5 defeitos que a validação revelou (corrigidos em `94034d1`)
+
+| Defeito | Causa | Correção |
+|---|---|---|
+| Setas do campo de minutos inertes | Ao estilizar `QSpinBox` no QSS o Qt **para de desenhar as setas nativas** e a geometria dos sub-botões colapsa. Provado com `QTest`: clique no canto superior direito não mudava o valor e o meio-direita fazia `30 → 29` | Sub-botões zerados no QSS + `widgets.stepper()`, que põe botões **− / +** de verdade ao lado do campo (alvo grande, no espírito do padrão minimalista) |
+| "Salvar" parecia sempre ativo | A lógica estava certa (rodei o app com `_mark_dirty` instrumentado: ninguém marca sozinho — o que acendeu foi o dono mexer no spin quebrado). O problema era o **azul-claro** do estado desabilitado, que ainda lê como "botão azul clicável" | `QPushButton[role="primary"]:disabled` agora é cinza com texto apagado. Medido no pixel: `#f7f7f8` desligado × `#2563eb` ligado |
+| "Atualizar" da aba Atividade sem feedback | A leitura do SQLite é instantânea e a tabela costuma vir idêntica → o clique parece ignorado | Rótulo `Atualizado às HH:MM:SS — N registro(s)`; o relógio muda a cada clique |
+| Faixa cinza sobre o cartão branco | O container de `widgets.row()` herdava o fundo do `QWidget` (mesmo motivo pelo qual `QLabel`/`QCheckBox` são transparentes) | `QWidget[role="row"]` transparente — sumiu em todas as abas |
+| Texto do teste de conexão | Dizia "N item(ns) visíveis na pasta", mas o número vem de `list_folders()`: são **pastas que a conta de serviço enxerga**, não arquivos dentro da pasta | "a conta de serviço enxerga N pasta(s) compartilhada(s)" |
+
+`tests/test_ui_theme.py` (3 testes) trava essas decisões de QSS. Roda no CI **sem Qt**,
+porque `ui/theme.py` não importa PySide6 — é só string.
 
 ### Fase 2 — o que foi entregue (SPEC §4)
 
@@ -119,21 +146,35 @@ Para testar (e) o conteúdo precisa ser realmente diferente.
 
 ## ▶️ Próximo passo exato para retomar
 
-Fases 1, 2 e 3 fechadas em código; nada pendente de commit ou push. **Falta a validação
-da Fase 3 pelo dono** — ele encerrou a sprint dizendo *"fazemos os testes mais tarde"*.
-Critério F3 do SPEC: "usuário leigo configura tudo pela UI sem editar YAML; app sobrevive
-a reboot e roda sozinho".
+Nada pendente de commit ou push. **A Fase 4 está autorizada e ainda não começou** — o
+dono encerrou a sprint com *"faremos depois"*. Comece pelo item 1, que não depende dele:
 
-**Ao retomar:** perguntar se ele já fez os testes da UI. Se não, conduzir o roteiro
-abaixo com ele. Se sim e estiver tudo certo, **pedir o aval para a Fase 4** (polimento
-GitHub: OAuth de usuário, export de Docs nativos, PyInstaller e o spike do escopo
-`drive.file` + Google Picker, SPEC §7). Não avançar sem o "ok" (regra de gate por fase).
+1. **Export de Docs nativos.** Documentos/Planilhas/Apresentações do Google não têm
+   binário para baixar: precisam de `files.export` para `.docx`/`.xlsx`/`.pdf`.
+   `sync.export_google_docs` e `sync.export_formats` **já existem na config e são
+   ignorados pelo core** — é aí que entra. Atenção: arquivos exportados **não têm
+   `md5Checksum`**, então a verificação de integridade da regra 2 do `CLAUDE.md`
+   precisa de um caminho próprio (decidir e documentar: tamanho? sem verificação com
+   evento explícito?). Vale também tratar `size` ausente na fila.
+2. **Login com Google (OAuth de usuário)** + token cifrado com DPAPI.
+   `core/auth.py` tem `UserOAuthAuth` como stub com a interface pronta.
+3. **PyInstaller**: .exe único. `ui/startup.py:launch_command()` já trata `sys.frozen` e
+   `ui/icons.py` desenha o ícone em runtime (nenhum recurso para empacotar).
+4. **READMEs** bilíngues completos (EN + pt-BR).
+5. **Spike `drive.file` + Google Picker** (SPEC §7): o acesso concedido à pasta escolhida
+   cobre arquivos criados **depois**? Se sim, vira o modo padrão para terceiros.
 
-Ficou pendente do lado dele, da Fase 2: conferir no painel do healthchecks.io se o
-*period* está em intervalo + 15 min (os alertas mostraram **45 min**, o que bate com o
-intervalo de 30 — só falta confirmar a *grace*).
+**Precisa do dono nos itens 2 e 5:** criar um **client OAuth de desktop** no Google Cloud
+Console (grátis). Avisar com o passo a passo antes de chegar lá — não deixe isso virar
+bloqueio no meio do trabalho; faça 1, 3 e 4 enquanto isso.
 
-### Roteiro da validação da Fase 3 (para conduzir com o dono)
+Pendências do lado dele (só avisar, não bloqueiam):
+- Item 7 do roteiro da Fase 3: **reiniciar o Windows** e ver o app voltar sozinho.
+- Fase 2: conferir no painel do healthchecks.io se o *period* está em intervalo + 15 min
+  (os alertas mostraram **45 min**; o intervalo agora está em **26**, então o period
+  continua folgado — só confirmar a *grace*).
+
+### Roteiro da validação da Fase 3 (já percorrido em 11/08; mantido para regressão)
 
 1. `python gui.py` → confirmar ícone na bandeja e a janela abrindo.
 2. **Conexão** → "Testar conexão" deve responder com o número de pastas visíveis.
@@ -154,26 +195,30 @@ Comando de captura de metadados remotos (reutilizável para futuros diffs):
 ./.venv/Scripts/python.exe -c "import json;from core.auth import build_auth;from core.config import load_config;from core.drive import build_service,build_tree,iter_files;cfg=load_config('config.yaml');svc=build_service(build_auth(cfg.auth));fs=iter_files(build_tree(svc,cfg.sync.pairs[0].drive_folder_id));json.dump({f.name:{'md5':f.md5,'size':f.size,'id':f.id} for f in fs},open('remote_meta.json','w'));print(len(fs))"
 ```
 
-## Estado concreto da máquina (não versionado)
+## Estado concreto da máquina (não versionado) — 11/08/2026, fim da sprint
 
-- **Backup real existe:** `D:\DriveGuardian\` com **118** arquivos no topo (o remoto tem
-  **117** — a diferença é o arquivo apagado no Drive e preservado localmente), mais
-  `_versões\` com 1 arquivo (a versão antiga do teste (e)). ~12.4 GB.
-- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 117 `synced` + 1 `removido_no_drive`
-  (o arquivo apagado no Drive, cópia local intacta).
-  Logs em `%LOCALAPPDATA%\DriveGuardian\logs\drive-guardian.log`.
+- **Backup real:** `D:\DriveGuardian\` com **168** arquivos no topo e `_versões\` com 1,
+  **18.53 GB**. Cresceu 50 arquivos hoje (o Drive recebeu novidades e o app baixou
+  sozinho durante a validação).
+- **Estado:** `%LOCALAPPDATA%\DriveGuardian\state.db` → 168 conhecidos = **167 `synced` +
+  1 `removido_no_drive`** (o arquivo apagado no Drive, cópia local intacta).
+  Último ciclo ok: `2026-08-11T14:01:44Z`. Logs em
+  `%LOCALAPPDATA%\DriveGuardian\logs\drive-guardian.log`.
+- **⚠️ O app FICOU RODANDO** (a UI, iniciada às 10:35 local; PIDs 11132/14412 naquela
+  sessão) — de propósito, para o backup continuar e o heartbeat não cair. Para encerrar:
+  menu da bandeja → Sair, ou `Stop-Process` (ver gotcha).
 - **`config.yaml`** real na raiz (git-ignored); valores em `secrets/valores.md`.
-- **Nenhum processo do app rodando** ao fim da sprint (o teste da UI foi encerrado com
-  `Stop-Process`). O último ciclo foi o da própria UI, às 15:54 UTC de 10/08.
+  **`interval_minutes` está em 26** — o dono mexeu no campo durante o teste, antes da
+  correção das setas. Não é defeito; se ele quiser 30, é pela aba Parâmetros.
 - **`.venv` tem o PySide6 instalado** (6.11.1), então `python gui.py` roda direto.
-- **`remote_meta.json`** na raiz (git-ignored) = snapshot dos metadados remotos, já
-  **atualizado para o estado pós-validação** (117 arquivos) — serve de baseline para
-  o próximo diff.
+- **`remote_meta.json`** na raiz (git-ignored) = snapshot dos metadados remotos, **de
+  10/08 (117 arquivos), portanto DESATUALIZADO** frente aos 167 de hoje. Regerar com o
+  comando acima antes de usá-lo como baseline de diff.
 
 ## Ambiente e comandos
 
 - venv em `.venv`. Gate: `ruff check . && mypy core/ ui/ gui.py cli.py && pytest`
-  (112 testes verdes). O `[tool.mypy] platform = "win32"` do `pyproject.toml` é o que faz
+  (115 testes verdes, 1 skip). O `[tool.mypy] platform = "win32"` do `pyproject.toml` faz
   o `winreg` do `ui/startup.py` resolver também no Linux do CI.
 - `python cli.py list | sync | sync --dry-run | watch | status | events | summary | test-alert`.
 - `python gui.py` abre a interface (requer `pip install -e ".[ui]"`).
@@ -205,6 +250,20 @@ Comando de captura de metadados remotos (reutilizável para futuros diffs):
   cartão branco; o QSS os força a `background: transparent`.
 - **Screenshot da UI para conferência:** `QT_QPA_PLATFORM=offscreen` renderiza sem
   fontes (tudo vira quadradinho). Usar o backend nativo e `widget.grab()` sem `show()`.
+- **QSS mata os sub-controles nativos.** Estilizar `QSpinBox` (ou `QComboBox`) faz o Qt
+  trocar o estilo nativo pelo `QStyleSheetStyle`: as setas deixam de ser desenhadas e a
+  área de clique colapsa. Se estilizar o campo, ou define `::up-button`/`::down-button`
+  na mão (e mesmo assim **a seta não aparece sem `image:`**, que exigiria recurso
+  empacotado), ou usa controles próprios — foi o caminho do `widgets.stepper`.
+- **Como provar defeito de UI sem depender do olho:** `QTest.mouseClick(widget, ..., pos)`
+  para o comportamento e `widget.grab().toImage().pixelColor(x, y)` + `Counter` para a
+  cor dominante de uma região. Foi assim que se mostrou que "o clique sempre diminuía" e
+  que o botão desabilitado estava com o azul cheio `#2563eb`.
+- **Descobrir quem dispara um sinal:** monkeypatch do método (`MainWindow._mark_dirty`)
+  com `traceback.print_stack()` e rodar o app real por alguns segundos. Foi o que
+  inocentou a lógica do botão Salvar.
+- **`ruff` RUF001/RUF002** barram o sinal de menos `U+2212` em string e docstring. No
+  código use `chr(0x2212)`; nos comentários, escreva "menos/mais" por extenso.
 - **Heartbeat cai sozinho quando o app não está rodando** — é o comportamento correto
   (é assim que o healthchecks avisa que o backup parou). Depois de testar à mão, ou
   deixe o `watch`/a UI rodando, ou pause o check no painel.
@@ -222,18 +281,15 @@ Comando de captura de metadados remotos (reutilizável para futuros diffs):
 
 `ui/`: `app` (entrada), `main_window` (janela + abas), `tray`, `worker` (thread do
 engine), `tabs/{connection,folders,parameters,activity}`, `widgets` (Card/Kpi/
-Segmented/badge), `theme` (QSS + tokens), `icons` (bandeja em runtime), `startup`
-(registro do Windows), `formatting` (apresentação sem Qt, testável no CI),
+Segmented/badge/**stepper**), `theme` (QSS + tokens), `icons` (bandeja em runtime),
+`startup` (registro do Windows), `formatting` (apresentação sem Qt, testável no CI),
 `strings` (PT-BR).
 
 `cli.py` fino; `gui.py` é o atalho da interface.
 
-## Depois da Fase 3
+## Fase 4 — pontos de apoio
 
-**Fase 4 — Polimento GitHub:** OAuth de usuário, export de Docs nativos, PyInstaller,
-spike do escopo `drive.file` + Google Picker (SPEC §7).
-
-Pontos já mapeados que a Fase 4 encosta:
+A ordem de ataque está em "Próximo passo exato". Pontos já mapeados que a fase encosta:
 - `ui/startup.py:launch_command()` já trata o caso empacotado (`sys.frozen`).
 - `ui/icons.py` desenha o ícone em runtime — o PyInstaller não precisa de recursos.
 - `core/auth.py` tem o `UserOAuthAuth` como stub, com a interface já definida.
