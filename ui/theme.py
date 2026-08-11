@@ -52,7 +52,7 @@ def build_stylesheet() -> str:
 
     /* Rótulos e caixas herdam o fundo do QWidget e desenhariam uma faixa cinza
        por cima do cartão branco. Transparente resolve — e vale para todos. */
-    QLabel, QCheckBox {{ background: transparent; }}
+    QLabel, QCheckBox, QWidget[role="row"] {{ background: transparent; }}
 
     /* --- Tipografia --------------------------------------------------- */
     QLabel[role="h1"]      {{ font-size: {FONT_H1}px; font-weight: 600; }}
@@ -97,7 +97,25 @@ def build_stylesheet() -> str:
         font-weight: 600;
     }}
     QPushButton[role="primary"]:hover {{ background: {PRIMARY_HOVER}; }}
-    QPushButton[role="primary"]:disabled {{ background: #a8bff5; border-color: #a8bff5; }}
+    /* Desligado tem de parecer desligado: um azul mais claro ainda lê como
+       "botão azul, pode clicar". Cinza com texto apagado não deixa dúvida. */
+    QPushButton[role="primary"]:disabled {{
+        background: {BACKGROUND};
+        border-color: {BORDER};
+        color: {TEXT_MUTED};
+        font-weight: 400;
+    }}
+
+    /* Botões de menos e mais do campo numérico (ver `widgets.stepper`). */
+    QPushButton[role="stepper"] {{
+        min-width: 38px;
+        max-width: 38px;
+        padding: 0;
+        font-size: {FONT_SECTION}px;
+        font-weight: 600;
+        color: {TEXT};
+    }}
+    QPushButton[role="stepper"]:hover {{ background: {PRIMARY_SOFT}; border-color: {PRIMARY}; }}
 
     /* Controle segmentado: 2 a 3 opções lado a lado, altura igual */
     QPushButton[role="segment"] {{
@@ -122,6 +140,10 @@ def build_stylesheet() -> str:
         selection-background-color: {PRIMARY};
     }}
     QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {PRIMARY}; }}
+    /* Ao estilizar o QSpinBox o Qt para de desenhar as setas nativas: elas
+       ficam invisíveis e a área de clique colapsa (todo clique virava "-1").
+       Escondemos os sub-botões de vez e usamos os botões de menos/mais do `stepper`. */
+    QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none; }}
     QLineEdit:read-only {{ background: {BACKGROUND}; color: {TEXT_MUTED}; }}
     QComboBox::drop-down {{ border: none; width: 22px; }}
 

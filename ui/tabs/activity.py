@@ -7,6 +7,7 @@ mesma que o `cli.py events` imprime — e os contadores vêm de ``cycles``.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -90,6 +91,12 @@ class ActivityTab(QWidget):
         export.clicked.connect(self._export)
         card.add(row(self._segmented, refresh, export))
 
+        # Sem isto o "Atualizar" não dá sinal nenhum: a leitura do banco é
+        # instantânea e a tabela costuma vir igual, então o clique parece
+        # ignorado. O carimbo de hora muda a cada clique e prova o contrário.
+        self._refreshed = label("", "meta")
+        card.add(self._refreshed)
+
         self._table = QTableWidget(0, 3)
         self._table.setHorizontalHeaderLabels(
             [S.ACTIVITY_COL_TIME, S.ACTIVITY_COL_LEVEL, S.ACTIVITY_COL_MESSAGE]
@@ -116,6 +123,9 @@ class ActivityTab(QWidget):
             counts = state.count_by_status()
 
         self._fill_table(rows)
+        self._refreshed.setText(
+            S.ACTIVITY_REFRESHED.format(time=datetime.now().strftime("%H:%M:%S"), n=len(rows))
+        )
 
         if cycles:
             last = cycles[0]

@@ -32,7 +32,7 @@ from core.paths import state_db_path
 from core.state import State
 from ui import startup
 from ui import strings as S
-from ui.widgets import Card, button, label, row, set_text
+from ui.widgets import Card, button, label, row, set_text, stepper
 
 
 class ParametersTab(QWidget):
@@ -62,15 +62,17 @@ class ParametersTab(QWidget):
         self._interval.setRange(MIN_INTERVAL_MINUTES, 1440)
         self._interval.setValue(config.sync.interval_minutes)
         self._interval.setSuffix(S.PARAMS_INTERVAL_SUFFIX)
+        self._interval.setMinimumWidth(140)
         self._interval.valueChanged.connect(self.changed)
-        card.add_row(S.PARAMS_INTERVAL, self._interval)
+        card.add_row(S.PARAMS_INTERVAL, stepper(self._interval))
 
         self._bandwidth = QSpinBox()
         self._bandwidth.setRange(0, 10_000)
         self._bandwidth.setValue(config.sync.bandwidth_limit_mbps)
         self._bandwidth.setSuffix(S.PARAMS_BANDWIDTH_SUFFIX)
+        self._bandwidth.setMinimumWidth(140)
         self._bandwidth.valueChanged.connect(self.changed)
-        card.add_row(S.PARAMS_BANDWIDTH, self._bandwidth)
+        card.add_row(S.PARAMS_BANDWIDTH, stepper(self._bandwidth))
 
         self._startup = QCheckBox(S.PARAMS_STARTUP)
         self._startup.setChecked(startup.is_enabled())
@@ -112,10 +114,11 @@ class ParametersTab(QWidget):
         self._summary_hour = QSpinBox()
         self._summary_hour.setRange(0, 23)
         self._summary_hour.setValue(notif.summary_hour)
+        self._summary_hour.setMinimumWidth(140)
         self._summary_hour.valueChanged.connect(self.changed)
 
         card.add_row(S.PARAMS_SUMMARY_DAY, self._summary_day)
-        card.add_row(S.PARAMS_SUMMARY_HOUR, self._summary_hour)
+        card.add_row(S.PARAMS_SUMMARY_HOUR, stepper(self._summary_hour))
 
         self._test_button = button(S.PARAMS_TEST_ALERT)
         self._test_button.clicked.connect(self._send_test_alert)

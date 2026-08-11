@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -205,9 +206,30 @@ def button(text: str, *, primary: bool = False) -> QPushButton:
     return widget
 
 
+def stepper(spin: QSpinBox) -> QWidget:
+    """Campo numérico com botões de menos e mais visíveis ao lado.
+
+    As setinhas nativas do ``QSpinBox`` não sobrevivem ao QSS: o Qt deixa de
+    desenhá-las e os sub-botões colapsam, de modo que qualquer clique na borda
+    direita caía no "diminuir". Botões de verdade resolvem o clique e ainda dão
+    um alvo grande, no espírito do padrão minimalista.
+    """
+    # U+2212 (sinal de menos) alinha com o "+"; o hífen fica pequeno e alto.
+    minus = button(chr(0x2212))
+    minus.setProperty("role", "stepper")
+    minus.clicked.connect(spin.stepDown)
+    plus = button("+")
+    plus.setProperty("role", "stepper")
+    plus.clicked.connect(spin.stepUp)
+    return row(spin, minus, plus, spacing=6, stretch_last=False)
+
+
 def row(*widgets: QWidget, spacing: int = 8, stretch_last: bool = False) -> QWidget:
     """Fileira horizontal simétrica (nada de quebra com larguras diferentes)."""
     container = QWidget()
+    # Sem isto o container herda o cinza do QWidget e desenha uma faixa sobre o
+    # cartão branco — o mesmo motivo pelo qual QLabel/QCheckBox são transparentes.
+    container.setProperty("role", "row")
     layout = QHBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(spacing)
@@ -230,5 +252,6 @@ __all__ = [
     "scrollable",
     "set_badge",
     "set_text",
+    "stepper",
     "theme",
 ]
